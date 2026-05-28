@@ -1,0 +1,105 @@
+.container {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 28px 32px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+  flex: 1;
+}
+
+.count {
+  font-size: 13px;
+  color: #64748b;
+  background: #0f172a;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.refreshBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.2s;
+
+  &:hover:not(:disabled) {
+    background: #0f172a;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 0;
+  color: #64748b;
+  font-size: 14px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.loadingSpinner {
+  font-size: 28px;
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.emptyIcon {
+  font-size: 40px;
+}
+
+.emptyText {
+  color: #64748b;
+}
+
+.errorText {
+  color: #f87171;
+}
+
+.retryBtn {
+  padding: 7px 18px;
+  border: 1px solid #334155;
+  border-radius: 7px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "name": "video-to-audio",
+  "version": "1.0.0",
+  "description": "音视频转音频工具站",
+  "main": "index.js",
+  "scripts": {
+    "dev": "webpack serve --config webpack.dev.js",
+    "build": "webpack --config webpack.prod.js",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/eslint-parser": "7.29.7",
+    "@babel/preset-env": "7.29.7",
+    "@babel/preset-react": "7.29.7",
+    "@babel/preset-typescript": "7.29.7",
+    "@types/node": "20.11.0",
+    "@types/react": "19.1.6",
+    "@types/react-dom": "19.1.6",
+    "@typescript-eslint/eslint-plugin": "8.18.0",
+    "@typescript-eslint/parser": "8.18.0",
+    "babel-loader": "9.2.1",
+    "css-loader": "6.10.0",
+    "dotenv": "17.4.2",
+    "eslint": "8.57.1",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "4.6.2",
+    "html-webpack-plugin": "5.6.7",
+    "sass": "1.71.0",
+    "sass-loader": "14.2.1",
+    "style-loader": "3.3.4",
+    "typescript": "5.3.3",
+    "webpack": "5.107.1",
+    "webpack-cli": "5.1.4",
+    "webpack-dev-server": "5.2.4",
+    "webpack-merge": "6.0.1"
+  },
+  "dependencies": {
+    "@microsoft/fetch-event-source": "2.0.1",
+    "ajv": "^8.20.0",
+    "axios": "1.15.2",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "7.6.1"
+  }
+}

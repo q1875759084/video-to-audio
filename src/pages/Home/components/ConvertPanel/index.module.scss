@@ -1,0 +1,95 @@
+.panel {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 28px 32px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.tab {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    color: #94a3b8;
+  }
+
+  &.activeTab {
+    background: #1e293b;
+    color: #f1f5f9;
+    font-weight: 500;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.body {
+  // 占位，让内容区有最小高度，避免进度条时布局抖动
+  min-height: 80px;
+}
+
+.progressWrapper {
+  padding: 16px 0;
+}
+
+.errorBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0;
+}
+
+.errorText {
+  font-size: 14px;
+  color: #f87171;
+  margin: 0;
+  text-align: center;
+}
+
+.retryBtn {
+  padding: 8px 20px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+
+  &:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+  }
+}
