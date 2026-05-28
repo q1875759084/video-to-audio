@@ -1,5 +1,5 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
-import { getToken, setToken, clearToken } from './token';
+import { getAccessToken, setAccessToken, clearToken, hasValidToken } from './token';
 
 // 统一响应体结构
 export interface ApiResponse<T = unknown> {
@@ -16,7 +16,7 @@ const request = axios.create({
 
 // 请求拦截：自动附加 Authorization header
 request.interceptors.request.use((config) => {
-  const token = getToken();
+  const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -33,7 +33,7 @@ function processPendingQueue(newToken: string) {
   pendingQueue = [];
 }
 
-// 响应拦截：401 时自动刷新 AccessToken 并重试
+// 响应拦截：401 时自动刷新 AccessToken 并重试（无感刷新）
 request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     const { data } = response;
@@ -46,8 +46,15 @@ request.interceptors.response.use(
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // 无有效 AccessToken，直接跳登录（无需发刷新请求）
+      if (!hasValidToken()) {
+        clearToken();
+        window.location.href = '/login';
+        return Promise.reject(new Error('登录状态过期，请重新登录'));
+      }
+
       if (isRefreshing) {
-        // 等待刷新完成后重试
+        // 已有刷新在途，将当前请求加入等待队列
         return new Promise((resolve) => {
           pendingQueue.push((token) => {
             if (originalRequest.headers) {
@@ -62,20 +69,21 @@ request.interceptors.response.use(
       isRefreshing = true;
 
       try {
+        // RefreshToken 通过 HttpOnly Cookie 自动携带，无需手动传递
         const resp = await axios.post<ApiResponse<{ accessToken: string }>>(
           '/api/user/refresh',
           {},
           { withCredentials: true }
         );
         const newToken = resp.data.data.accessToken;
-        setToken(newToken);
+        setAccessToken(newToken);
         processPendingQueue(newToken);
         if (originalRequest.headers) {
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
         }
         return request(originalRequest);
       } catch {
-        // 刷新失败：清除 token，跳转登录页
+        // 刷新失败（RefreshToken 也过期）：清除本地 token，跳转登录
         clearToken();
         pendingQueue = [];
         window.location.href = '/login';

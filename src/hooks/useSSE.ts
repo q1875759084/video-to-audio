@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
-import { getToken } from '@/utils/token';
+import { getAccessToken } from '@/utils/token';
 import type { SSEProgressData, SSEDoneData, SSEErrorData } from '@/types/sse';
 
 const MAX_RETRY_COUNT = 3;
@@ -37,7 +37,7 @@ export function useSSE(options: UseSSEOptions) {
 
     fetchEventSource(`/api/convert/progress/${taskId}`, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${getToken() ?? ''}` },
+      headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
       signal: ctrlRef.current.signal,
       openWhenHidden: true,
       async onopen(response) {
