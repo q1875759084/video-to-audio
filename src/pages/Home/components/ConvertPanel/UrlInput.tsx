@@ -29,7 +29,7 @@ export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
         <input
           type="text"
           className={styles.urlInput}
-          placeholder="粘贴视频链接（支持 B站、YouTube 等平台及直链）"
+          placeholder="粘贴视频链接或分享文本（支持 B站、YouTube 等平台及直链）"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
