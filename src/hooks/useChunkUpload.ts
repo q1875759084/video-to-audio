@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
-import { initUpload, uploadChunk, mergeUpload } from '@/api/convert';
-import type { OutputFormat } from '@/types/convert';
+import { initUpload, uploadChunk, mergeUpload, TaskLimitError } from '@/api/convert';
+import type { OutputFormat, ActiveTaskSummary } from '@/types/convert';
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
 const CONCURRENT_LIMIT = 3;          // 最多 3 个分片并发上传
@@ -9,6 +9,8 @@ interface UseChunkUploadOptions {
   onProgress?: (percent: number) => void;
   onComplete?: (taskId: string) => void;
   onError?: (message: string) => void;
+  /** 并发超限时触发，携带后端返回的活跃任务列表 */
+  onTaskLimited?: (activeTasks: ActiveTaskSummary[]) => void;
 }
 
 /**
@@ -78,8 +80,13 @@ export function useChunkUpload(options: UseChunkUploadOptions) {
       options.onProgress?.(100);
       options.onComplete?.(taskId);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '上传失败，请重试';
-      options.onError?.(message);
+      if (err instanceof TaskLimitError) {
+        // 并发超限：透传活跃任务列表，由上层 ConvertPanel 切换到 blocked 状态
+        options.onTaskLimited?.(err.activeTasks);
+      } else {
+        const message = err instanceof Error ? err.message : '上传失败，请重试';
+        options.onError?.(message);
+      }
     } finally {
       setIsUploading(false);
     }

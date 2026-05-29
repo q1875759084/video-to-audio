@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { getAccessToken } from '@/utils/token';
-import type { SSEProgressData, SSEDoneData, SSEErrorData } from '@/types/sse';
+import type { SSEProgressData, SSEDoneData, SSEErrorData, SSEQueuedData } from '@/types/sse';
 
 const MAX_RETRY_COUNT = 3;
 const RETRY_BASE_DELAY = 1000;
@@ -17,6 +17,8 @@ interface UseSSEOptions {
   onProgress?: (data: SSEProgressData) => void;
   onDone?: (data: SSEDoneData) => void;
   onError?: (data: SSEErrorData) => void;
+  /** 任务在全局队列中排队等待时触发 */
+  onQueued?: (data: SSEQueuedData) => void;
 }
 
 export function useSSE(options: UseSSEOptions) {
@@ -55,6 +57,8 @@ export function useSSE(options: UseSSEOptions) {
           } else if (ev.event === 'error') {
             optionsRef.current.onError?.(data as SSEErrorData);
             ctrlRef.current?.abort();
+          } else if (ev.event === 'queued') {
+            optionsRef.current.onQueued?.(data as SSEQueuedData);
           }
         } catch { /* JSON 解析失败静默处理 */ }
       },

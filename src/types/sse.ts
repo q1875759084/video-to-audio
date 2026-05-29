@@ -13,4 +13,8 @@ export interface SSEErrorData {
   message: string;
 }
 
-export type SSEEventType = 'progress' | 'done' | 'error';
+export interface SSEQueuedData {
+  message: string;
+}
+
+export type SSEEventType = 'progress' | 'done' | 'error' | 'queued';

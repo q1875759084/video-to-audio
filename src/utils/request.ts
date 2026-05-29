@@ -33,12 +33,26 @@ function processPendingQueue(newToken: string) {
   pendingQueue = [];
 }
 
+/**
+ * 业务层错误（后端返回 code !== 200 的情况）
+ * 携带原始 response，供调用方按需读取 data 字段（如 429 的 activeTasks）
+ */
+export class ApiError extends Error {
+  response: AxiosResponse<ApiResponse<unknown>>;
+  constructor(message: string, response: AxiosResponse<ApiResponse<unknown>>) {
+    super(message);
+    this.name = 'ApiError';
+    this.response = response;
+  }
+}
+
 // 响应拦截：401 时自动刷新 AccessToken 并重试（无感刷新）
 request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     const { data } = response;
     if (data.code !== 200) {
-      return Promise.reject(new Error(data.message || '请求失败'));
+      // 保留完整 response，调用方可从 err.response.data 读取扩展字段（如 429 的 activeTasks）
+      return Promise.reject(new ApiError(data.message || '请求失败', response));
     }
     return response;
   },

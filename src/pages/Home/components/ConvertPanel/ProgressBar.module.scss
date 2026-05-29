@@ -34,3 +34,17 @@
   border-radius: 3px;
   transition: width 0.3s ease;
 }
+
+/* 排队等待时的不确定进度动画 */
+@keyframes indeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.barIndeterminate {
+  height: 100%;
+  width: 25%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 3px;
+  animation: indeterminate 1.4s ease-in-out infinite;
+}

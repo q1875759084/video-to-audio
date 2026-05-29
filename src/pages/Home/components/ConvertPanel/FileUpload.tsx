@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import type { OutputFormat } from '@/types/convert';
+import type { OutputFormat, ActiveTaskSummary } from '@/types/convert';
 import { useChunkUpload } from '@/hooks/useChunkUpload';
 import ProgressBar from './ProgressBar';
 import styles from './FileUpload.module.scss';
@@ -16,9 +16,11 @@ const ACCEPT = 'video/*,audio/*,.mp4,.mov,.avi,.mkv,.webm,.flv,.wmv,.m4v,.mp3,.m
 interface FileUploadProps {
   onTaskCreated: (taskId: string, format: OutputFormat) => void;
   onError: (message: string) => void;
+  /** 并发超限时触发，携带后端返回的活跃任务列表 */
+  onTaskLimited?: (activeTasks: ActiveTaskSummary[]) => void;
 }
 
-export default function FileUpload({ onTaskCreated, onError }: FileUploadProps) {
+export default function FileUpload({ onTaskCreated, onError, onTaskLimited }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [format, setFormat] = useState<OutputFormat>('mp3');
@@ -29,6 +31,7 @@ export default function FileUpload({ onTaskCreated, onError }: FileUploadProps) 
     onProgress: setUploadProgress,
     onComplete: (taskId) => onTaskCreated(taskId, format),
     onError,
+    onTaskLimited,
   });
 
   const handleFileSelect = useCallback((file: File) => {

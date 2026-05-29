@@ -1,11 +1,12 @@
 import { useReducer, useCallback, useRef } from 'react';
-import { submitUrlConvert } from '@/api/convert';
+import { submitUrlConvert, TaskLimitError } from '@/api/convert';
 import { useSSE } from '@/hooks/useSSE';
 import type {
   ConvertState,
   ConvertAction,
   ConvertMode,
   OutputFormat,
+  ActiveTaskSummary,
 } from '@/types/convert';
 import UrlInput from './UrlInput';
 import FileUpload from './FileUpload';
@@ -23,6 +24,7 @@ const initialState: ConvertState = {
   taskId: null,
   result: null,
   errorMessage: null,
+  activeTasks: null,
 };
 
 function convertReducer(state: ConvertState, action: ConvertAction): ConvertState {
@@ -35,6 +37,8 @@ function convertReducer(state: ConvertState, action: ConvertAction): ConvertStat
       return { ...state, uploadProgress: action.payload };
     case 'START_SUBMITTING':
       return { ...state, status: 'submitting', errorMessage: null };
+    case 'START_QUEUED':
+      return { ...state, status: 'queued', taskId: action.payload.taskId };
     case 'START_CONVERTING':
       return { ...state, status: 'converting', taskId: action.payload.taskId };
     case 'SET_CONVERT_PROGRESS':
@@ -47,11 +51,30 @@ function convertReducer(state: ConvertState, action: ConvertAction): ConvertStat
       return { ...state, status: 'done', result: action.payload, convertProgress: 100 };
     case 'ERROR':
       return { ...state, status: 'error', errorMessage: action.payload };
+    case 'BLOCKED':
+      // 并发超限：展示当前占用配额的任务，提供恢复监听入口
+      return { ...state, status: 'blocked', activeTasks: action.payload, errorMessage: null };
     case 'RESET':
       return { ...initialState, mode: state.mode };
     default:
       return state;
   }
+}
+
+// ─── 工具函数 ─────────────────────────────────────────────────────────────────
+
+/** 将 source 字符串截断展示（URL 只保留域名+路径尾部，文件名保留原名） */
+function formatSource(task: ActiveTaskSummary): string {
+  if (task.type === 'url') {
+    try {
+      const url = new URL(task.source);
+      const pathname = url.pathname.split('/').filter(Boolean).slice(-2).join('/');
+      return `${url.hostname}/${pathname || ''}`;
+    } catch {
+      return task.source.slice(0, 60);
+    }
+  }
+  return task.source;
 }
 
 // ─── 组件 ────────────────────────────────────────────────────────────────────
@@ -80,6 +103,9 @@ export default function ConvertPanel({ onConvertDone }: ConvertPanelProps) {
     onError: (data) => {
       dispatch({ type: 'ERROR', payload: data.message });
     },
+    onQueued: () => {
+      // queued 事件：任务在全局队列中等待，status 已由 START_QUEUED 设置
+    },
   });
 
   /** 拿到 taskId 后建立 SSE 连接，开始监听转码进度 */
@@ -89,27 +115,49 @@ export default function ConvertPanel({ onConvertDone }: ConvertPanelProps) {
     connectSSE(taskId);
   }, [connectSSE]);
 
+  /** 拿到 taskId，但任务处于排队中 */
+  const startQueued = useCallback((taskId: string, format: OutputFormat) => {
+    currentFormatRef.current = format;
+    dispatch({ type: 'START_QUEUED', payload: { taskId } });
+    connectSSE(taskId);
+  }, [connectSSE]);
+
+  /**
+   * 恢复监听：用户刷新后命中 blocked 状态，点击某个活跃任务直接接续 SSE
+   * format 从 activeTasks 里读取
+   */
+  const handleResume = useCallback((task: ActiveTaskSummary) => {
+    currentFormatRef.current = task.format;
+    dispatch({ type: 'START_QUEUED', payload: { taskId: task.taskId } });
+    connectSSE(task.taskId);
+  }, [connectSSE]);
+
   /** URL 模式：提交链接 */
   const handleUrlSubmit = useCallback(async (url: string, format: OutputFormat) => {
     dispatch({ type: 'START_SUBMITTING' });
     try {
       const { taskId } = await submitUrlConvert({ url, format });
-      startConvertProgress(taskId, format);
+      startQueued(taskId, format);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '提交失败，请重试';
-      dispatch({ type: 'ERROR', payload: message });
+      if (err instanceof TaskLimitError) {
+        // 并发超限：展示正在进行的任务，让用户选择恢复监听
+        dispatch({ type: 'BLOCKED', payload: err.activeTasks });
+      } else {
+        dispatch({ type: 'ERROR', payload: err instanceof Error ? err.message : '提交失败，请重试' });
+      }
     }
-  }, [startConvertProgress]);
+  }, [startQueued]);
 
   /** 文件模式：分片上传完成，拿到 taskId + format */
   const handleFileTaskCreated = useCallback((taskId: string, format: OutputFormat) => {
-    startConvertProgress(taskId, format);
-  }, [startConvertProgress]);
+    startQueued(taskId, format);
+  }, [startQueued]);
 
-  const isLoading = ['uploading', 'submitting', 'converting'].includes(state.status);
+  const isLoading = ['uploading', 'submitting', 'queued', 'converting'].includes(state.status);
 
   const getProgressLabel = (): string => {
     if (state.status === 'submitting') return '提交中...';
+    if (state.status === 'queued') return '排队等待中，前方有任务正在执行...';
     if (state.status === 'converting') {
       return state.convertStage === 'downloading' ? '下载视频中...' : '音频转码中...';
     }
@@ -118,6 +166,7 @@ export default function ConvertPanel({ onConvertDone }: ConvertPanelProps) {
 
   const getProgressPercent = (): number => {
     if (state.status === 'submitting') return 5;
+    if (state.status === 'queued') return 0;
     if (state.status === 'converting') return Math.max(5, state.convertProgress);
     return 0;
   };
@@ -164,12 +213,48 @@ export default function ConvertPanel({ onConvertDone }: ConvertPanelProps) {
           </div>
         )}
 
-        {/* 进行中：进度条 */}
-        {(state.status === 'submitting' || state.status === 'converting') && (
+        {/* 并发超限：展示正在进行的任务，提供恢复监听入口 */}
+        {state.status === 'blocked' && state.activeTasks && (
+          <div className={styles.blockedBox}>
+            <p className={styles.blockedTitle}>⏳ 您有任务正在进行中</p>
+            <p className={styles.blockedHint}>点击任务可恢复进度监听</p>
+            <ul className={styles.activeTaskList}>
+              {state.activeTasks.map((task) => (
+                <li key={task.taskId} className={styles.activeTaskItem}>
+                  <div className={styles.activeTaskInfo}>
+                    <span className={styles.activeTaskFormat}>{task.format.toUpperCase()}</span>
+                    <span className={styles.activeTaskSource} title={task.source}>
+                      {formatSource(task)}
+                    </span>
+                    <span className={styles.activeTaskStatus}>
+                      {task.status === 'pending' ? '排队中' : '转换中'}
+                    </span>
+                  </div>
+                  <button
+                    className={styles.resumeBtn}
+                    onClick={() => handleResume(task)}
+                  >
+                    恢复监听
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <button
+              className={styles.retryBtn}
+              onClick={() => dispatch({ type: 'RESET' })}
+            >
+              等任务完成后再试
+            </button>
+          </div>
+        )}
+
+        {/* 进行中（包含排队等待）：进度条 */}
+        {(state.status === 'submitting' || state.status === 'queued' || state.status === 'converting') && (
           <div className={styles.progressWrapper}>
             <ProgressBar
               percent={getProgressPercent()}
               label={getProgressLabel()}
+              indeterminate={state.status === 'queued'}
             />
           </div>
         )}
@@ -183,6 +268,7 @@ export default function ConvertPanel({ onConvertDone }: ConvertPanelProps) {
               <FileUpload
                 onTaskCreated={handleFileTaskCreated}
                 onError={(msg) => dispatch({ type: 'ERROR', payload: msg })}
+                onTaskLimited={(tasks) => dispatch({ type: 'BLOCKED', payload: tasks })}
               />
             )}
           </>

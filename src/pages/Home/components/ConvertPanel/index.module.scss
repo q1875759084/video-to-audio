@@ -93,3 +93,97 @@
     color: #6366f1;
   }
 }
+
+// ─── 并发超限（blocked）状态 ──────────────────────────────────────────────────
+
+.blockedBox {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 0;
+}
+
+.blockedTitle {
+  font-size: 14px;
+  color: #fbbf24;
+  margin: 0;
+  font-weight: 600;
+}
+
+.blockedHint {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.activeTaskList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.activeTaskItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+.activeTaskInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.activeTaskFormat {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #1e3a5f;
+  color: #60a5fa;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.activeTaskSource {
+  flex: 1;
+  font-size: 13px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activeTaskStatus {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #fbbf24;
+}
+
+.resumeBtn {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border: 1px solid #4f46e5;
+  border-radius: 6px;
+  background: transparent;
+  color: #818cf8;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+
+  &:hover {
+    background: #4f46e5;
+    color: #fff;
+  }
+}
