@@ -70,6 +70,95 @@ npm config set registry https://r.npm.sankuai.com/      # 装完改回来
 
 ---
 
+## B 站视频下载
+
+### B 站反爬：HTTP 412 / 验证码拦截，云服务器 IP 被标记
+
+**触发场景**：yt-dlp 从腾讯云服务器（上海）直接请求 B 站链接，返回 HTTP 412 或 `<title>验证码_哔哩哔哩</title>`，下载失败。
+
+**根本原因**：B 站对已知数据中心 IP 段有渐进式风控，即使是国内 IP，只要识别为云主机即触发人机验证。`window._riskdata_` 出现在响应 HTML 中是铁证。此时加 UA、Cookie、Referer 均无效，因为风控的核心是 **IP 类型**，而非请求头。
+
+**排查过程**：
+
+| 尝试方案 | 结果 | 原因 |
+|---------|------|------|
+| 加 `--user-agent` / `--add-header Referer` | ❌ | 风控不看请求头 |
+| `--geo-bypass` | ❌ | 无效，B 站不看 GeoIP |
+| `--cookies-from-browser` | ❌ | Cookie 不能改变 IP 类型 |
+| `--extractor-args bilibili:player_client=android` | ❌ | yt-dlp 将安卓 UA 解析出 `m.bilibili.com` URL，但 generic extractor 不支持移动端页面 |
+| 升级 yt-dlp 到 nightly | ❌ | 同上，安卓模拟方向有限制 |
+
+**最终解法**：引入国内运营商原生 IP 代理（快代理 独享代理 纯生版），`--proxy` 参数让 yt-dlp 全程走住宅 IP，完全绕过数据中心 IP 标记。
+
+**代理选型原则**：
+- ✅ 国内住宅/家庭宽带 IP（"纯生版"、"原生 IP"）
+- ❌ 海外 IP（B 站对海外风控更严）
+- ❌ 免费代理（IP 段早已进黑名单）
+- ❌ 普通隧道代理（仍为数据中心 IP）
+
+---
+
+### 代理带宽瓶颈：独享代理实测仅 4 KB/s
+
+**触发场景**：引入代理后，7 分钟的 B 站视频，3.5 分钟仅下载 5%，实测代理带宽约 4 KB/s（约 0.03 Mbps）。
+
+**根本原因**：「独享代理 纯生版」的产品定位是 **IP 纯净度**，不是下载速度。带宽极低是该产品的固有特性，不是配置问题。
+
+**验证方式**：
+
+```bash
+# 通过代理下载测速
+curl -o /dev/null -s -w '%{speed_download} B/s\n' \
+  --proxy 'http://user:pass@ip:port' \
+  'http://httpbin.org/bytes/2000000'
+# 实测结果：4103 B/s ≈ 4 KB/s
+```
+
+**解法：两步走，代理只用于认证，数据直连下载**
+
+```
+旧方案（全程走代理，极慢）：
+B站链接 → yt-dlp（--proxy → 4KB/s 下载数据）→ 2-3 小时
+
+新方案（代理仅获取直链，直连下载数据）：
+B站链接 → yt-dlp -g（--proxy → 获取 CDN 直链，<1s）
+         → wget（无代理，直连腾讯云 5-10 Mbps）→ 30-60 秒
+```
+
+**核心原理**：B 站 CDN 直链（`bilivideo.com`）对来源 IP 没有限制，签名参数只验证有效期（约 10 分钟），不绑定 IP。代理只需要参与 B 站 API 认证阶段（流量极小），实际视频数据走服务器直连满速下载。
+
+**实现要点**：
+- `yt-dlp -g` + `--proxy`：通过代理调用 B 站 API，返回带签名的 CDN 直链，不下载任何数据
+- `wget -O outputPath directUrl`：直连下载，不携带代理
+- B 站 bestaudio 通常为 `m4a` 格式，固定输出为 `source.m4a`，ffmpeg 可直接处理
+- 直链有效期约 10 分钟，获取后须立即下载，不可缓存
+
+**涉及文件**：
+- `video-to-audio-backend/src/services/convert/ytdlp.ts`：新增 `downloadViaDirect`、`needsProxyExtract`，B 站链接走两步走分支
+- `video-to-audio-backend/Dockerfile`：runner 阶段新增 `wget` 安装
+
+---
+
+### 代理 IP 动态化：通过 API 获取，无需手动更新
+
+**背景**：快代理独享代理（动态型）每天会自动更换 IP，硬编码 IP 地址会在次日凌晨失效，需要每天手动去 GitHub 改 Secret。
+
+**解法**：每次调用 yt-dlp 前，先请求快代理 `getkpsbyid` API 获取当前有效 IP，拼成完整代理地址再传给 yt-dlp。
+
+```
+快代理 API → { ip: "58.19.x.x", port: "10803" }
+→ 拼成 http://user:pass@58.19.x.x:10803
+→ yt-dlp --proxy http://user:pass@58.19.x.x:10803
+```
+
+**鉴权方式**：快代理支持「密钥明文验证」，`signature` 字段直接填 SecretKey，无需额外 token。
+
+**凭证管理**：SecretId / SecretKey / 代理用户名密码通过环境变量注入（`KDL_SECRET_ID`、`KDL_SIGNATURE`、`KDL_PROXY_USER`、`KDL_PROXY_PASS`），代码内保留 `??` 默认值作为回退，方便本地直接运行。
+
+**涉及文件**：`video-to-audio-backend/src/services/convert/ytdlp.ts` 中的 `getKdlProxy()` 函数。
+
+---
+
 ### 双环境部署流程（video-to-audio）
 
 **端口分配**：
