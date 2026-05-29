@@ -21,6 +21,20 @@
   width: 100%;
 }
 
+.loadingText {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+}
+
+.errorText {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #ef4444;
+  text-align: center;
+}
+
 .player {
   width: 100%;
   height: 48px;

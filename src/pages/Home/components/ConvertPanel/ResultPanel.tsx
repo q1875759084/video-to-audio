@@ -10,7 +10,8 @@ interface ResultPanelProps {
 
 /**
  * 用带 Authorization 头的 fetch 请求音频文件，返回 Blob Object URL。
- * Token 不会出现在 URL / 服务器日志 / 浏览器历史中。
+ * Token 不出现在 URL / 服务器日志 / 浏览器历史中。
+ * Blob URL 由浏览器内存管理，<audio> 直接读取本地内存，无需任何鉴权。
  */
 async function fetchAudioBlob(fileId: string): Promise<string> {
   const token = getAccessToken();
@@ -26,13 +27,13 @@ async function fetchAudioBlob(fileId: string): Promise<string> {
 export default function ResultPanel({ result, onReset }: ResultPanelProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const blobUrlRef = useRef<string | null>(null);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     setLoadError(false);
-    setBlobUrl(null);
 
     fetchAudioBlob(result.fileId)
       .then((url) => {
@@ -40,16 +41,28 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
           URL.revokeObjectURL(url);
           return;
         }
-        blobUrlRef.current = url;
-        setBlobUrl(url);
+        // 直接操作 DOM 设置 src，避免经过 React state 产生 src=undefined 的中间态
+        // 中间态会导致浏览器触发 error 事件或以错误的初始状态解码音频
+        if (audioRef.current) {
+          // 先释放旧的 Blob URL
+          if (blobUrlRef.current) {
+            URL.revokeObjectURL(blobUrlRef.current);
+          }
+          blobUrlRef.current = url;
+          audioRef.current.src = url;
+          audioRef.current.load();
+        }
+        setLoading(false);
       })
       .catch(() => {
-        if (!cancelled) setLoadError(true);
+        if (!cancelled) {
+          setLoading(false);
+          setLoadError(true);
+        }
       });
 
     return () => {
       cancelled = true;
-      // 组件卸载时释放 Blob URL，避免内存泄漏
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
@@ -57,7 +70,7 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
     };
   }, [result.fileId]);
 
-  /** 下载：同样用 fetch + Authorization，动态触发 <a> 点击 */
+  /** 下载：fetch + Authorization header，动态触发 <a> 点击 */
   const handleDownload = async () => {
     try {
       const token = getAccessToken();
@@ -71,7 +84,6 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
       a.href = url;
       a.download = `audio_${result.fileId.slice(0, 8)}.${result.format}`;
       a.click();
-      // 短暂延迟后释放，确保浏览器已触发下载
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch {
       alert('下载失败，请重试');
@@ -90,11 +102,13 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
           <audio
             ref={audioRef}
             controls
-            src={blobUrl ?? undefined}
             className={styles.player}
           >
             您的浏览器不支持音频播放
           </audio>
+        )}
+        {loading && !loadError && (
+          <p className={styles.loadingText}>音频加载中...</p>
         )}
       </div>
 
