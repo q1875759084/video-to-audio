@@ -51,8 +51,8 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      - name: Lint 校验
-        run: npm run lint
+      - name: 类型检查
+        run: npm run type-check
 
       - name: 构建校验
         run: npm run build
