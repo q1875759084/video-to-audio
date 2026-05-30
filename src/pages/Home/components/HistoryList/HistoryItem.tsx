@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import type { HistoryItem as HistoryItemType } from '@/types/history';
 import { deleteHistory } from '@/api/history';
-import { getAccessToken } from '@/utils/token';
 import styles from './HistoryItem.module.scss';
 
 interface HistoryItemProps {
@@ -30,43 +29,14 @@ function formatDate(iso: string): string {
   });
 }
 
-/**
- * 内联预览播放器：展开时用 fetch + Authorization 拉取音频，生成 Blob URL 给 <audio>。
- * Token 不会出现在 URL / 服务器日志 / 浏览器历史中。
- * 收起（组件卸载）时自动释放 Blob URL，避免内存泄漏。
- */
+/** 内联预览播放器：<audio> 直接流式播放，浏览器自动处理 Range 请求 */
 function InlinePlayer({ fileId }: { fileId: string }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-  const blobUrlRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const token = getAccessToken();
-    fetch(`/api/file/${fileId}/preview`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`${res.status}`);
-        return res.blob();
-      })
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        blobUrlRef.current = url;
-        setBlobUrl(url);
-      })
-      .catch(() => setError(true));
-
-    return () => {
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = null;
-      }
-    };
-  }, [fileId]);
-
-  if (error) return <p className={styles.errorText}>音频加载失败</p>;
   return (
-    <audio controls src={blobUrl ?? undefined} className={styles.audio}>
+    <audio
+      controls
+      src={`/api/file/${fileId}/preview`}
+      className={styles.audio}
+    >
       您的浏览器不支持音频播放
     </audio>
   );
@@ -76,32 +46,9 @@ export default function HistoryItem({ item, onDeleted }: HistoryItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [downloading, setDownloading] = useState(false);
 
-  /** 下载：fetch + Authorization 头，动态触发 <a> 点击 */
-  const handleDownload = async () => {
-    if (downloading) return;
-    setDownloading(true);
-    try {
-      const token = getAccessToken();
-      const res = await fetch(`/api/file/${item.fileId}/download`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`下载失败: ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `audio_${item.fileId.slice(0, 8)}.${item.format}`;
-      a.click();
-      // 短暂延迟后释放，确保浏览器已触发下载
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch {
-      alert('下载失败，请重试');
-    } finally {
-      setDownloading(false);
-    }
-  };
+  const filename = `audio_${item.fileId.slice(0, 8)}.${item.format}`;
+  const downloadUrl = `/api/file/${item.fileId}/download?filename=${encodeURIComponent(filename)}`;
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -146,9 +93,14 @@ export default function HistoryItem({ item, onDeleted }: HistoryItemProps) {
           >
             {isExpanded ? '收起' : '▶ 预览'}
           </button>
-        <button className={styles.actionBtn} onClick={handleDownload} disabled={downloading}>
-          {downloading ? '下载中...' : '⬇ 下载'}
-        </button>
+          {/* <a download> 是标准的浏览器原生下载，无需 fetch+Blob，移动端兼容性最好 */}
+          <a
+            className={styles.actionBtn}
+            href={downloadUrl}
+            download={filename}
+          >
+            ⬇ 下载
+          </a>
           {showConfirm ? (
             <>
               <span className={styles.confirmText}>确认删除？</span>
@@ -177,7 +129,7 @@ export default function HistoryItem({ item, onDeleted }: HistoryItemProps) {
         </div>
       </div>
 
-      {/* 内联预览播放器（展开时挂载，收起时卸载并释放 Blob URL）*/}
+      {/* 内联预览播放器（展开时挂载，收起时卸载） */}
       {isExpanded && (
         <div className={styles.player}>
           <InlinePlayer fileId={item.fileId} />
