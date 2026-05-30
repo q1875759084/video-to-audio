@@ -2,6 +2,46 @@
 
 ---
 
+### 2026-05-30（续二）
+
+#### [重构] 文件访问改为 Capability URL，去掉鉴权，大幅简化播放/下载逻辑
+
+**涉及文件**：
+- `video-to-audio-backend/src/routes/file/index.ts`
+- `video-to-audio-backend/src/controllers/file/index.ts`
+- `video-to-audio/src/pages/Home/components/ConvertPanel/ResultPanel.tsx`
+- `video-to-audio/src/pages/Home/components/HistoryList/HistoryItem.tsx`
+
+**背景**：
+
+文件接口原本套了 JWT 鉴权，为了让浏览器原生下载（无法加 header）能传 token，引入了 `fileDownloadAuthMiddleware` 支持 query token。播放则用 `fetch + Authorization header` 把整个文件拉进内存生成 Blob URL 再给 `<audio>`。整个链路越打越复杂，根源在于对文件接口加了不必要的鉴权。
+
+**分析**：
+
+音视频转换类工具（convertio、cloudconvert 等）的标准做法是 **Capability URL**：`fileId` 本身是 128 位 UUID，随机性极强，知道这个 URL 就能访问，不知道就访问不了。文件是用户从公网视频提取的音频，不含任何隐私数据，URL 即凭证，无需额外鉴权。
+
+**改动**：
+
+后端：
+- `routes/file/index.ts`：`preview` 和 `download` 两条路由全部去掉鉴权中间件
+- `controllers/file/index.ts`：`resolveFormat` 去掉 `userId` 参数（原本也未真正校验归属），删除 `preview` 里读取但从未使用的 `getHistoryById` 死代码
+
+前端：
+- `ResultPanel.tsx`：删除 `fetchAudioBlob` 函数及全部 Blob URL 管理逻辑（`useEffect`、`useRef`、`URL.revokeObjectURL`），`<audio src>` 直接设为 `/api/file/:id/preview`，下载改为 `<a href download>`
+- `HistoryItem.tsx`：`InlinePlayer` 从 fetch+Blob 改为 `<audio src>` 直连；`handleDownload` 整个删掉（`downloading` 状态、fetch、Blob 触发逻辑），改为 `<a href download>`
+
+**效果对比**：
+
+| | 重构前 | 重构后 |
+|--|--------|--------|
+| 播放原理 | fetch 全文件 → Blob URL → `<audio>` | `<audio src>` 直连，浏览器流式 Range 播放 |
+| 内存占用 | 整个文件（10MB wav = 10MB 内存） | 仅当前播放缓冲区（几十 KB） |
+| 下载方式 | 多路分支（Blob `a.click()` / `window.location.href`） | `<a href download>` 统一 |
+| 移动端兼容 | 存在国产浏览器拦截 `a.click()` 的风险 | 浏览器原生行为，无拦截问题 |
+| 代码量 | ResultPanel ~130 行，HistoryItem ~190 行 | ResultPanel ~40 行，HistoryItem ~100 行 |
+
+---
+
 ### 2026-05-30（续）
 
 #### [修复] 正在转换时进度条文案错误显示"前方有任务"
