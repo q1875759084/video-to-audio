@@ -82,3 +82,58 @@
 **关键细节 — `ApiError` vs 普通 `Error`**：
 
 原拦截器 `reject(new Error(message))` 会丢弃 `response.data`，导致 `activeTasks` 无法传到调用方。改为 `reject(new ApiError(message, response))` 后，调用方通过 `instanceof ApiError` 判断并读取扩展数据，同时不影响其他正常错误的处理路径。
+
+---
+
+#### [修复] 手机下载音频文件类型识别错误 + 无下载反馈
+
+**涉及文件**：
+- `video-to-audio-backend/src/controllers/file/index.ts`（后端）
+- `video-to-audio/src/pages/Home/components/ConvertPanel/ResultPanel.tsx`（前端）
+- `video-to-audio/src/pages/Home/components/HistoryList/HistoryItem.tsx`（前端）
+
+**问题1：iOS/Safari 下载的文件类型不对**
+
+后端下载接口 `Content-Type` 设置为 `application/octet-stream`，iOS Safari 收到该类型后无法识别文件是音频，保存时缺少扩展名或显示为未知文件。
+
+**修复**：下载接口改为返回正确的音频 MIME 类型：
+
+```
+mp3 → audio/mpeg
+aac → audio/aac
+wav → audio/wav
+```
+
+同时补充了 `Content-Length` 响应头（利于浏览器显示下载进度）和 `filename*=UTF-8''...`（RFC 5987 编码，确保各端文件名正确）。
+
+**问题2：手机点击下载按钮后无任何反馈（卡顿感）**
+
+前端 `handleDownload` 使用 `fetch` 将整个文件载入内存再触发下载，手机网络慢时等待时间长，按钮没有任何状态变化，用户不知道是否在处理中，容易误以为没响应而重复点击。
+
+**修复**：新增 `downloading` 状态，下载期间按钮显示「下载中...」并禁用，防止重复触发。
+
+---
+
+#### [修复] B 站链接多种格式兼容：从用户粘贴文本中提取真实 URL
+
+**涉及文件**：`video-to-audio-backend/src/controllers/convert/index.ts`
+
+**问题**：用户从 B 站复制的链接往往不是纯 URL，有三种常见格式：
+
+| 来源 | 实际粘贴内容 |
+|------|------------|
+| 浏览器地址栏 | `https://www.bilibili.com/video/BV1qp4y1v7Rn/` |
+| PC 端分享按钮 | `【视频标题】 https://www.bilibili.com/video/BV1qp4y1v7Rn/?...` |
+| APP 端分享 | `【视频标题-哔哩哔哩】 https://b23.tv/7zzjrYh` |
+
+后两种格式直接传给 `yt-dlp` 会因为非法 URL 报错。
+
+> **说明**：`b23.tv` 短链本身从最初版本就能用，`yt-dlp` 原生跟随 HTTP 302 重定向，无需额外处理。这次修复的是"标题文字和链接混排"导致整体不是合法 URL 的问题。
+
+**方案**：在控制器入口处新增 `extractUrl(input)` 函数，先于 `yt-dlp` 调用执行：
+
+1. 用正则 `/https?:\/\/[^\s\u3000-\u303f\uff00-\uffef]+/` 扫描文本，取第一个 `http(s)://` 开头、遇到空白字符或全角标点停止的串
+2. 去除末尾可能残留的中文标点（句号、引号、括号等）
+3. 用 `new URL(url)` 做合法性验证，失败则返回 `null` 并提前 400
+
+前端 `UrlInput` 的 `placeholder` 同步更新为「支持直接粘贴分享文本」，无需用户手动裁剪链接。

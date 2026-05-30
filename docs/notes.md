@@ -139,6 +139,65 @@ B站链接 → yt-dlp -g（--proxy → 获取 CDN 直链，<1s）
 
 ---
 
+### 代理协议选择：http / socks5 / socks5h 的区别
+
+**触发场景**：将代理协议从 `http://` 改为 `socks5://` 后，yt-dlp 报 `[Errno 4] Host unreachable`；改为 `socks5h://` 后偶发超时；最终 `socks5h://` + `--socket-timeout 30` 稳定可用。
+
+**三种协议的本质差异**：
+
+| 协议 | DNS 解析方 | HTTPS 支持 | 适用场景 |
+|------|-----------|-----------|---------|
+| `http://` | 本地 | 需 CONNECT 隧道，取决于代理支持 | HTTP 网站，或代理支持 CONNECT 的 HTTPS |
+| `socks5://` | **本地** DNS 解析后传 IP | ✅ 天然支持 | 代理 ACL 允许裸 IP 访问时 |
+| `socks5h://` | **代理服务器** DNS 解析 | ✅ 天然支持 | 代理 ACL 只允许域名、或本地无法解析时 |
+
+**快代理独享纯生版的行为**：
+- `http://` → HTTPS CONNECT 返回 503（不支持隧道）
+- `socks5://` → 本地解析出 IP 后传给代理，代理 ACL 拒绝裸 IP → `Errno 4 Host unreachable`
+- `socks5h://` → 传域名给代理，代理自己解析，ACL 通过 → ✅ 可用
+
+**curl 验证命令**：
+
+```bash
+# socks5h（让代理解析 DNS）- 等价 yt-dlp 的 socks5h://
+curl -v --socks5-hostname 'ip:port' -U 'user:pass' 'https://www.bilibili.com'
+# 成功标志：SOCKS5 request granted. + HTTP/2 200
+
+# socks5（本地 DNS）
+curl -v --socks5 'ip:port' -U 'user:pass' 'https://www.bilibili.com'
+# 失败标志：Can't complete SOCKS5 connection to ... (2 或 4)
+```
+
+**涉及文件**：`video-to-audio-backend/src/services/convert/ytdlp.ts` — `socks5hProxy` 替换逻辑及 `--socket-timeout 30` 参数。
+
+---
+
+### 代理 IP 被目标网站拉黑的判断与处理
+
+**触发场景**：更换新的快代理独享纯生版 IP 后，`socks5h` 连接正常建立（`SOCKS5 request granted`），但等待 20 秒无响应，`HTTP_CODE: 000`。
+
+**判断方法**：
+
+```bash
+# 测试代理 IP 是否被 B 站拉黑
+curl -s --max-time 15 \
+  --socks5-hostname 'ip:port' -U 'user:pass' \
+  -w 'HTTP_CODE:%{http_code}\n' \
+  'https://api.bilibili.com/x/web-interface/nav' -o /dev/null
+
+# HTTP_CODE:200 → 可用
+# HTTP_CODE:000（超时）→ 该 IP 被 B 站拉黑，连接建立后直接 RST
+```
+
+**处理策略**：
+1. 在快代理控制台点 IP 旁的 🔀 图标更换出口 IP（免费操作）
+2. 换 IP 后重新跑上述 curl 命令验证
+3. **重要**：快代理提示「因使用原因（如过快访问）导致 IP 被封，无法更换」，但正常使用（每次转换调用一次）不会触发该限制；被拉黑通常是该 IP 在被我们使用前就已经在 B 站黑名单中
+
+**代理 IP 选择建议**：移动运营商 IP 比电信/联通被拉黑概率更低（实测移动舟山可用，电信庆阳/黄冈被拉黑）。
+
+---
+
 ### 代理 IP 动态化：通过 API 获取，无需手动更新
 
 **背景**：快代理独享代理（动态型）每天会自动更换 IP，硬编码 IP 地址会在次日凌晨失效，需要每天手动去 GitHub 改 Secret。
