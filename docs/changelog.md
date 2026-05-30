@@ -2,6 +2,53 @@
 
 ---
 
+### 2026-05-30（续）
+
+#### [修复] 正在转换时进度条文案错误显示"前方有任务"
+
+**涉及文件**：`video-to-audio/src/pages/Home/components/ConvertPanel/index.tsx`
+
+**问题**：任务提交后前端始终先进入 `queued` 状态（兼容排队场景）。当任务**无需排队直接执行**时，后端不推送 `queued` 事件，只推 `progress`，但 `onProgress` 回调只更新进度数字，没有把状态从 `queued` 切换到 `converting`，导致进度条文案一直显示「排队等待中，前方有任务正在执行」。
+
+**修复**：
+- 新增 `currentStatusRef` 和 `currentTaskIdRef` 两个 ref，在 SSE 闭包中读取当前状态（SSE 回调是闭包，无法直接读 useReducer 的 state）
+- `onProgress` 回调中判断：若当前 status 仍是 `queued` 或 `submitting`，先 dispatch `START_CONVERTING` 切换状态，再更新进度
+
+```typescript
+onProgress: (data) => {
+  if (currentStatusRef.current === 'queued' || currentStatusRef.current === 'submitting') {
+    dispatch({ type: 'START_CONVERTING', payload: { taskId: currentTaskIdRef.current! } });
+  }
+  dispatch({ type: 'SET_CONVERT_PROGRESS', payload: data });
+},
+```
+
+---
+
+#### [修复] 点击下载 MP3 卡顿，等待很久才唤起下载
+
+**涉及文件**：`video-to-audio/src/pages/Home/components/ConvertPanel/ResultPanel.tsx`
+
+**问题**：转换完成后 `ResultPanel` 会用 `fetchAudioBlob` 把整个音频文件拉入内存（用于在线播放）。点击下载时用 `window.location.href` 触发浏览器**重新向服务器请求一遍**，等于文件被下载了两遍，用户感知卡顿。
+
+**修复**：下载时优先复用 `blobUrlRef`（播放器已加载的内存数据），通过临时 `<a download>` 触发，零网络等待。仅当 Blob 未就绪时（加载中/加载失败）回退到 `window.location.href`。
+
+```typescript
+if (blobUrlRef.current) {
+  const a = document.createElement('a');
+  a.href = blobUrlRef.current;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  return;
+}
+// 回退：Blob 未就绪，走服务端下载接口
+window.location.href = downloadUrl;
+```
+
+---
+
 ### 2026-05-30
 
 #### [修复] 移动端下载慢且文件格式错误（.vdat）

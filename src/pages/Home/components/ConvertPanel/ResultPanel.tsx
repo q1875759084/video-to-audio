@@ -71,23 +71,33 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
   }, [result.fileId]);
 
   /**
-   * 下载：直接让浏览器跳转到下载 URL，token 通过 query string 传递。
+   * 下载：优先复用播放器已加载到内存的 Blob URL，避免重复请求服务器。
    *
-   * 为何不用 fetch + Blob URL：
-   * 1. 需要把整个文件加载进内存才能触发下载，移动端等待时间长且无进度反馈
-   * 2. 通过 JS 程序触发（a.click()）而非用户直接点击，国产手机浏览器（夸克/UC等）
-   *    会拦截并走自己的下载管理器，无法识别 Content-Disposition 中的文件名，
-   *    从 URL 路径推断类型，存成 .vdat 等错误格式
+   * 策略：
+   * - 若 blobUrlRef 已有值（预览加载完成），直接用 <a download> 触发下载，零网络等待
+   * - 若 blobUrlRef 尚未就绪（加载中或加载失败），回退到 window.location.href 请求服务端下载接口
    *
-   * 用 window.location.href 跳转：
-   * - 浏览器识别为用户主动触发的下载，不走拦截逻辑
-   * - Content-Disposition 中的文件名直接生效
-   * - 无需等待全部加载，浏览器边下边存
+   * 为何回退时用 window.location.href 而非 fetch+Blob：
+   *   国产手机浏览器（夸克/UC等）会拦截 JS 程序触发的下载（a.click()），
+   *   从 URL 路径推断类型存成 .vdat 等错误格式；
+   *   window.location.href 被识别为用户主动触发，Content-Disposition 文件名直接生效。
    */
   const handleDownload = () => {
-    const token = getAccessToken();
     const filename = `audio_${result.fileId.slice(0, 8)}.${result.format}`;
-    // 带文件名后缀的 URL，让浏览器从路径也能推断文件类型（双重保险）
+
+    if (blobUrlRef.current) {
+      // 已有缓存的 Blob URL：创建临时 <a> 触发下载，无需重新请求
+      const a = document.createElement('a');
+      a.href = blobUrlRef.current;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+
+    // 回退：Blob 尚未就绪，使用服务端下载接口（token 通过 query string 传递）
+    const token = getAccessToken();
     const url = `/api/file/${result.fileId}/download?token=${encodeURIComponent(token ?? '')}&filename=${encodeURIComponent(filename)}`;
     window.location.href = url;
   };

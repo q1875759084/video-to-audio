@@ -89,8 +89,19 @@ export default function ConvertPanel({ onConvertDone }: ConvertPanelProps) {
   // 用 ref 保存当前任务的 format，SSE done 时读取（避免闭包过期）
   const currentFormatRef = useRef<OutputFormat>('mp3');
 
+  // 用 ref 存储当前状态和 taskId，供 SSE 回调中判断（SSE 回调是闭包，无法直接读 state）
+  const currentStatusRef = useRef(state.status);
+  currentStatusRef.current = state.status;
+  const currentTaskIdRef = useRef(state.taskId);
+  currentTaskIdRef.current = state.taskId;
+
   const { connect: connectSSE } = useSSE({
     onProgress: (data) => {
+      // 收到 progress 时若仍处于 queued/submitting 状态，说明任务已开始执行
+      // 需先切换到 converting，再更新进度，否则进度条文案仍显示"前方有任务"
+      if (currentStatusRef.current === 'queued' || currentStatusRef.current === 'submitting') {
+        dispatch({ type: 'START_CONVERTING', payload: { taskId: currentTaskIdRef.current! } });
+      }
       dispatch({ type: 'SET_CONVERT_PROGRESS', payload: data });
     },
     onDone: (data) => {
@@ -104,7 +115,7 @@ export default function ConvertPanel({ onConvertDone }: ConvertPanelProps) {
       dispatch({ type: 'ERROR', payload: data.message });
     },
     onQueued: () => {
-      // queued 事件：任务在全局队列中等待，status 已由 START_QUEUED 设置
+      // queued 事件：任务在全局队列中等待，status 已由 START_QUEUED 设置，无需额外处理
     },
   });
 
