@@ -29,7 +29,6 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
   const blobUrlRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,28 +70,26 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
     };
   }, [result.fileId]);
 
-  /** 下载：fetch + Authorization header，动态触发 <a> 点击 */
-  const handleDownload = async () => {
-    if (downloading) return;
-    setDownloading(true);
-    try {
-      const token = getAccessToken();
-      const res = await fetch(`/api/file/${result.fileId}/download`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`下载失败: ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `audio_${result.fileId.slice(0, 8)}.${result.format}`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    } catch {
-      alert('下载失败，请重试');
-    } finally {
-      setDownloading(false);
-    }
+  /**
+   * 下载：直接让浏览器跳转到下载 URL，token 通过 query string 传递。
+   *
+   * 为何不用 fetch + Blob URL：
+   * 1. 需要把整个文件加载进内存才能触发下载，移动端等待时间长且无进度反馈
+   * 2. 通过 JS 程序触发（a.click()）而非用户直接点击，国产手机浏览器（夸克/UC等）
+   *    会拦截并走自己的下载管理器，无法识别 Content-Disposition 中的文件名，
+   *    从 URL 路径推断类型，存成 .vdat 等错误格式
+   *
+   * 用 window.location.href 跳转：
+   * - 浏览器识别为用户主动触发的下载，不走拦截逻辑
+   * - Content-Disposition 中的文件名直接生效
+   * - 无需等待全部加载，浏览器边下边存
+   */
+  const handleDownload = () => {
+    const token = getAccessToken();
+    const filename = `audio_${result.fileId.slice(0, 8)}.${result.format}`;
+    // 带文件名后缀的 URL，让浏览器从路径也能推断文件类型（双重保险）
+    const url = `/api/file/${result.fileId}/download?token=${encodeURIComponent(token ?? '')}&filename=${encodeURIComponent(filename)}`;
+    window.location.href = url;
   };
 
   return (
@@ -118,8 +115,8 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
       </div>
 
       <div className={styles.actions}>
-        <button className={styles.downloadBtn} onClick={handleDownload} disabled={downloading}>
-          {downloading ? '下载中...' : `⬇ 下载 ${result.format.toUpperCase()}`}
+        <button className={styles.downloadBtn} onClick={handleDownload}>
+          ⬇ 下载 {result.format.toUpperCase()}
         </button>
         <button className={styles.resetBtn} onClick={onReset}>
           再转一个
