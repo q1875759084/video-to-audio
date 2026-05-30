@@ -29,6 +29,7 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
   const blobUrlRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +73,8 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
 
   /** 下载：fetch + Authorization header，动态触发 <a> 点击 */
   const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
     try {
       const token = getAccessToken();
       const res = await fetch(`/api/file/${result.fileId}/download`, {
@@ -87,6 +90,8 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch {
       alert('下载失败，请重试');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -113,8 +118,8 @@ export default function ResultPanel({ result, onReset }: ResultPanelProps) {
       </div>
 
       <div className={styles.actions}>
-        <button className={styles.downloadBtn} onClick={handleDownload}>
-          ⬇ 下载 {result.format.toUpperCase()}
+        <button className={styles.downloadBtn} onClick={handleDownload} disabled={downloading}>
+          {downloading ? '下载中...' : `⬇ 下载 ${result.format.toUpperCase()}`}
         </button>
         <button className={styles.resetBtn} onClick={onReset}>
           再转一个

@@ -76,9 +76,12 @@ export default function HistoryItem({ item, onDeleted }: HistoryItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   /** 下载：fetch + Authorization 头，动态触发 <a> 点击 */
   const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
     try {
       const token = getAccessToken();
       const res = await fetch(`/api/file/${item.fileId}/download`, {
@@ -95,6 +98,8 @@ export default function HistoryItem({ item, onDeleted }: HistoryItemProps) {
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch {
       alert('下载失败，请重试');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -141,9 +146,9 @@ export default function HistoryItem({ item, onDeleted }: HistoryItemProps) {
           >
             {isExpanded ? '收起' : '▶ 预览'}
           </button>
-          <button className={styles.actionBtn} onClick={handleDownload}>
-            ⬇ 下载
-          </button>
+        <button className={styles.actionBtn} onClick={handleDownload} disabled={downloading}>
+          {downloading ? '下载中...' : '⬇ 下载'}
+        </button>
           {showConfirm ? (
             <>
               <span className={styles.confirmText}>确认删除？</span>
