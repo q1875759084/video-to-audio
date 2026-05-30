@@ -2,6 +2,40 @@
 
 ---
 
+### 2026-05-30
+
+#### [修复] 移动端下载慢且文件格式错误（.vdat）
+
+**涉及文件**：
+- `video-to-audio/src/pages/Home/components/ConvertPanel/ResultPanel.tsx`
+- `video-to-audio-backend/src/middleware/auth.ts`
+- `video-to-audio-backend/src/routes/file/index.ts`
+
+下载逻辑从 `fetch + Blob URL + a.click()` 改为 `window.location.href` 直接跳转，解决国产浏览器拦截程序触发下载导致的格式错误和延迟问题。同时新增 `fileDownloadAuthMiddleware` 支持 query token，供浏览器原生下载鉴权使用。详见 `notes.md`「移动端兼容」章节。
+
+---
+
+#### [修复] B 站链接代理：socks5h 协议 + socket-timeout
+
+**涉及文件**：`video-to-audio-backend/src/services/convert/ytdlp.ts`
+
+代理协议经历三次迭代才稳定：
+- `http://`：代理不支持 HTTPS CONNECT 隧道，返回 503
+- `socks5://`：本地 DNS 解析后传裸 IP，代理 ACL 拒绝，返回 Errno 4
+- `socks5h://` + `--socket-timeout 30`：代理服务器做 DNS 解析，稳定可用
+
+详见 `notes.md`「代理协议选择」章节。
+
+---
+
+#### [修复] 代理 IP 动态化，通过快代理 API 获取
+
+**涉及文件**：`video-to-audio-backend/src/services/convert/ytdlp.ts`
+
+新增 `getKdlProxy()` 函数，每次调用 yt-dlp 前先请求快代理 `getkpsbyid` API 获取当前有效 IP，替代硬编码地址，避免代理 IP 每天更换后需要手动修改配置。
+
+---
+
 ### 2026-05-29
 
 #### [功能] 任务队列：防止并发任务打满服务器资源
