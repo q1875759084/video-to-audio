@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { TimePicker } from 'antd';
-import dayjs, { type Dayjs } from 'dayjs';
 import type { OutputFormat, TimeSegment } from '@/types/convert';
 import styles from './UrlInput.module.scss';
 
@@ -17,19 +15,21 @@ interface UrlInputProps {
 
 type TrimMode = 'all' | 'custom';
 
-const TIME_FORMAT = 'HH:mm:ss';
+interface SegmentDraft {
+  start: string;
+  end: string;
+}
 
-/** dayjs 对象转 HH:MM:SS 字符串 */
-function dayjsToTimeStr(d: Dayjs): string {
-  return d.format(TIME_FORMAT);
+/** 校验时间格式：HH:MM:SS 或 MM:SS */
+function isValidTime(val: string): boolean {
+  return /^\d{1,2}:\d{2}:\d{2}$/.test(val.trim()) || /^\d{1,2}:\d{2}$/.test(val.trim());
 }
 
 export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
   const [url, setUrl] = useState('');
   const [format, setFormat] = useState<OutputFormat>('mp3');
   const [trimMode, setTrimMode] = useState<TrimMode>('all');
-  // 每个片段用 [start, end] 的 Dayjs 对存；null 表示未选
-  const [segments, setSegments] = useState<([Dayjs, Dayjs] | null)[]>([null]);
+  const [segments, setSegments] = useState<SegmentDraft[]>([{ start: '', end: '' }]);
 
   const handleSubmit = () => {
     const trimmedUrl = url.trim();
@@ -40,29 +40,31 @@ export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
       return;
     }
 
-    // 自定义模式：把已填写的片段转为字符串格式（过滤掉未填写的）
-    const filled = segments
-      .filter((seg): seg is [Dayjs, Dayjs] => seg !== null)
-      .map((seg) => ({ start: dayjsToTimeStr(seg[0]), end: dayjsToTimeStr(seg[1]) }));
+    const filled: TimeSegment[] = segments
+      .filter((seg) => isValidTime(seg.start) && isValidTime(seg.end))
+      .map((seg) => ({ start: seg.start.trim(), end: seg.end.trim() }));
 
     if (filled.length === 0) return;
     onSubmit(trimmedUrl, format, filled);
   };
 
   const handleAddSegment = () => {
-    setSegments((prev) => [...prev, null]);
+    setSegments((prev) => [...prev, { start: '', end: '' }]);
   };
 
   const handleRemoveSegment = (index: number) => {
     setSegments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSegmentChange = (index: number, value: [Dayjs, Dayjs] | null) => {
-    setSegments((prev) => prev.map((seg, i) => (i === index ? value : seg)));
+  const handleSegmentField = (index: number, field: 'start' | 'end', value: string) => {
+    setSegments((prev) =>
+      prev.map((seg, i) => (i === index ? { ...seg, [field]: value } : seg)),
+    );
   };
 
-  // 自定义模式下至少有一个片段已填写才允许提交
-  const hasValidSegment = trimMode === 'all' || segments.some((seg) => seg !== null);
+  const hasValidSegment =
+    trimMode === 'all' ||
+    segments.some((seg) => isValidTime(seg.start) && isValidTime(seg.end));
   const canSubmit = !isLoading && !!url.trim() && hasValidSegment;
 
   return (
@@ -96,24 +98,31 @@ export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
         </div>
       </div>
 
-      {/* 自定义片段列表（trimMode === 'custom' 时展开） */}
+      {/* 自定义片段列表 */}
       {trimMode === 'custom' && (
         <div className={styles.segmentList}>
           {segments.map((seg, index) => (
             <div key={index} className={styles.segmentRow}>
               <span className={styles.segmentLabel}>片段 {index + 1}</span>
-              <TimePicker.RangePicker
-                className={styles.rangePicker}
-                value={seg}
-                onChange={(val) => handleSegmentChange(index, val as [Dayjs, Dayjs] | null)}
-                disabled={isLoading}
-                format={TIME_FORMAT}
-                showSecond
-                needConfirm={false}
-                placeholder={['开始 00:00:00', '结束 00:00:00']}
-                order={false}
-              />
-              {/* 至少保留一个片段，只有多于一个时才显示删除按钮 */}
+              <div className={styles.timeRange}>
+                <input
+                  className={`${styles.timeInput} ${seg.start && !isValidTime(seg.start) ? styles.timeInputError : ''}`}
+                  type="text"
+                  value={seg.start}
+                  onChange={(e) => handleSegmentField(index, 'start', e.target.value)}
+                  placeholder="00:00:00"
+                  disabled={isLoading}
+                />
+                <span className={styles.timeSep}>→</span>
+                <input
+                  className={`${styles.timeInput} ${seg.end && !isValidTime(seg.end) ? styles.timeInputError : ''}`}
+                  type="text"
+                  value={seg.end}
+                  onChange={(e) => handleSegmentField(index, 'end', e.target.value)}
+                  placeholder="00:01:30"
+                  disabled={isLoading}
+                />
+              </div>
               {segments.length > 1 && (
                 <button
                   className={styles.removeBtn}
@@ -126,6 +135,7 @@ export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
               )}
             </div>
           ))}
+          <p className={styles.segmentHint}>格式：时:分:秒，如 00:01:30 表示第 1 分 30 秒</p>
           <button
             className={styles.addSegmentBtn}
             onClick={handleAddSegment}
