@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { TimePicker } from 'antd';
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import type { OutputFormat, TimeSegment } from '@/types/convert';
 import styles from './UrlInput.module.scss';
 
@@ -17,9 +17,11 @@ interface UrlInputProps {
 
 type TrimMode = 'all' | 'custom';
 
+const TIME_FORMAT = 'HH:mm:ss';
+
 /** dayjs 对象转 HH:MM:SS 字符串 */
 function dayjsToTimeStr(d: Dayjs): string {
-  return d.format('HH:mm:ss');
+  return d.format(TIME_FORMAT);
 }
 
 export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
@@ -38,14 +40,12 @@ export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
       return;
     }
 
-    // 自定义模式：把已填写的片段转为字符串格式
+    // 自定义模式：把已填写的片段转为字符串格式（过滤掉未填写的）
     const filled = segments
       .filter((seg): seg is [Dayjs, Dayjs] => seg !== null)
       .map((seg) => ({ start: dayjsToTimeStr(seg[0]), end: dayjsToTimeStr(seg[1]) }));
 
-    // 至少要有一个完整片段才能提交
     if (filled.length === 0) return;
-
     onSubmit(trimmedUrl, format, filled);
   };
 
@@ -61,7 +61,7 @@ export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
     setSegments((prev) => prev.map((seg, i) => (i === index ? value : seg)));
   };
 
-  // 自定义模式下，至少有一个片段已填写才允许提交
+  // 自定义模式下至少有一个片段已填写才允许提交
   const hasValidSegment = trimMode === 'all' || segments.some((seg) => seg !== null);
   const canSubmit = !isLoading && !!url.trim() && hasValidSegment;
 
@@ -107,10 +107,11 @@ export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
                 value={seg}
                 onChange={(val) => handleSegmentChange(index, val as [Dayjs, Dayjs] | null)}
                 disabled={isLoading}
-                // 以秒为单位展示，精确到秒
+                format={TIME_FORMAT}
                 showSecond
                 needConfirm={false}
-                placeholder={['开始时间', '结束时间']}
+                placeholder={['开始 00:00:00', '结束 00:00:00']}
+                order={false}
               />
               {/* 至少保留一个片段，只有多于一个时才显示删除按钮 */}
               {segments.length > 1 && (
