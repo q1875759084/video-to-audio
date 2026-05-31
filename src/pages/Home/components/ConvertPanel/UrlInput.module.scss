@@ -170,13 +170,6 @@
   }
 }
 
-.footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .formatGroup {
   display: flex;
   align-items: center;
@@ -208,6 +201,11 @@
     background: #6366f1;
     border-color: #6366f1;
     color: #fff;
+
+    // active 时 hover 不改变文字颜色（优先级与 :hover:not(:disabled) 对齐）
+    &:hover:not(:disabled) {
+      color: #fff;
+    }
   }
 
   &:disabled {
@@ -217,15 +215,15 @@
 }
 
 .submitBtn {
-  padding: 10px 24px;
+  width: 100%;
+  padding: 12px 24px;
   background: #6366f1;
   color: #fff;
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
   transition: background 0.2s, opacity 0.2s;
 
   &:hover:not(:disabled) {

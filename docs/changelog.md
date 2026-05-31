@@ -42,6 +42,30 @@
 
 ---
 
+### 2026-05-31
+
+#### [重构] 文件访问改为 Capability URL，去掉鉴权层
+
+**涉及文件**：
+- `video-to-audio-backend/src/routes/file/index.ts`
+- `video-to-audio-backend/src/controllers/file/index.ts`
+- `video-to-audio/src/pages/Home/components/ConvertPanel/ResultPanel.tsx`
+- `video-to-audio/src/pages/Home/components/HistoryList/HistoryItem.tsx`
+
+`fileId` 是 UUID（128 位随机），知道链接即可访问，外人无法枚举/猜测，且音频文件本身无用户隐私，符合 Capability URL 模式（与 Google Docs「知道链接可查看」、OSS 预签名 URL 同理）。
+
+原方案对 `/preview` 和 `/download` 接口加了 JWT 鉴权，带来了不必要的复杂性：播放需要 `fetch + Authorization header` 把整个文件拉进内存生成 Blob URL，下载需要 query token 中间件。
+
+**重构后**：
+- 路由去掉所有鉴权中间件
+- `<audio src="/api/file/:id/preview">` 直接流式播放，浏览器自动处理 Range 请求
+- `<a href="/api/file/:id/download" download>` 原生下载，即点即开，无等待
+- 删除 `fetchAudioBlob`、Blob URL 管理逻辑、`fileDownloadAuthMiddleware` 调用、`resolveFormat` 里无意义的 userId 参数、`preview` 里的死代码（`getHistoryById`）
+
+**删除代码量**：约 175 行
+
+---
+
 ### 2026-05-30（续）
 
 #### [修复] 正在转换时进度条文案错误显示"前方有任务"

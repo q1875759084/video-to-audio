@@ -197,7 +197,7 @@ export default function ConvertPanel({ onConvertDone }: ConvertPanelProps) {
               onClick={() => dispatch({ type: 'SET_MODE', payload: mode })}
               disabled={isLoading}
             >
-              {mode === 'url' ? '🔗 粘贴链接' : '📁 上传文件'}
+              <span>{mode === 'url' ? '🔗 粘贴链接' : '📁 上传文件'}</span>
             </button>
           ))}
         </div>

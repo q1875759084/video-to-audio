@@ -25,6 +25,7 @@ const GlobalStyle = () => (
     button, input, select, textarea {
       font-family: inherit;
       font-size: inherit;
+      color: inherit;
     }
   `}</style>
 );

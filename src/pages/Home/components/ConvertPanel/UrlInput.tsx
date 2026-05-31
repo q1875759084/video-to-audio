@@ -20,9 +20,21 @@ interface SegmentDraft {
   end: string;
 }
 
-/** 校验时间格式：HH:MM:SS 或 MM:SS */
+/** 校验时间格式：HH:MM:SS 或 MM:SS，且分秒必须在 0-59 之间 */
 function isValidTime(val: string): boolean {
-  return /^\d{1,2}:\d{2}:\d{2}$/.test(val.trim()) || /^\d{1,2}:\d{2}$/.test(val.trim());
+  const s = val.trim();
+  const matchLong = s.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (matchLong) {
+    const mm = parseInt(matchLong[2], 10);
+    const ss = parseInt(matchLong[3], 10);
+    return mm <= 59 && ss <= 59;
+  }
+  const matchShort = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (matchShort) {
+    const ss = parseInt(matchShort[2], 10);
+    return ss <= 59;
+  }
+  return false;
 }
 
 export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
@@ -92,7 +104,7 @@ export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
               onClick={() => setTrimMode(mode)}
               disabled={isLoading}
             >
-              {mode === 'all' ? '全部' : '自定义'}
+              <span>{mode === 'all' ? '全部' : '自定义'}</span>
             </button>
           ))}
         </div>
@@ -146,30 +158,29 @@ export default function UrlInput({ isLoading, onSubmit }: UrlInputProps) {
         </div>
       )}
 
-      {/* 底部：输出格式 + 提交按钮 */}
-      <div className={styles.footer}>
-        <div className={styles.formatGroup}>
-          <span className={styles.formatLabel}>输出格式</span>
-          {FORMAT_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              className={`${styles.formatBtn} ${format === opt.value ? styles.active : ''}`}
-              onClick={() => setFormat(opt.value)}
-              disabled={isLoading}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        <button
-          className={styles.submitBtn}
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-        >
-          {isLoading ? '处理中...' : '开始转换'}
-        </button>
+      {/* 底部：输出格式 */}
+      <div className={styles.formatGroup}>
+        <span className={styles.formatLabel}>输出格式</span>
+        {FORMAT_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            className={`${styles.formatBtn} ${format === opt.value ? styles.active : ''}`}
+            onClick={() => setFormat(opt.value)}
+            disabled={isLoading}
+          >
+            <span>{opt.label}</span>
+          </button>
+        ))}
       </div>
+
+      {/* 提交按钮：独占一行 */}
+      <button
+        className={styles.submitBtn}
+        onClick={handleSubmit}
+        disabled={!canSubmit}
+      >
+        {isLoading ? '处理中...' : '开始转换'}
+      </button>
     </div>
   );
 }
