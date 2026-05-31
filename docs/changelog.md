@@ -66,6 +66,30 @@
 
 ---
 
+### 2026-05-31
+
+#### [重构] 文件访问改为 Capability URL，去掉鉴权
+
+**涉及文件**：
+- `video-to-audio-backend/src/routes/file/index.ts`
+- `video-to-audio-backend/src/controllers/file/index.ts`
+- `video-to-audio/src/pages/Home/components/ConvertPanel/ResultPanel.tsx`
+- `video-to-audio/src/pages/Home/components/HistoryList/HistoryItem.tsx`
+
+`fileId` 是 UUID，知道链接即可访问，无需额外鉴权（Capability URL 模式，与 convertio、cloudconvert 等工具一致）。
+
+删除内容：
+- `preview` / `download` 接口的 JWT 鉴权中间件
+- `ResultPanel` 里的 `fetchAudioBlob`、Blob URL 管理全部逻辑（useEffect / useRef / revokeObjectURL）
+- `HistoryItem` 里 `InlinePlayer` 的 fetch+Blob 逻辑和 `handleDownload` 的 fetch 方案
+- `fileDownloadAuthMiddleware`（路由层不再使用）
+- `resolveFormat` 里无意义的 `userId` 参数
+- `preview` 控制器里读取了但从未用到的 `getHistoryById` 死代码
+
+改为：播放 `<audio src="/api/file/:id/preview">`，下载 `<a href="/api/file/:id/download" download>`，浏览器原生流式播放和下载，内存占用从整个文件降至当前播放缓冲区。详见 `notes.md`「文件访问鉴权」章节。
+
+---
+
 ### 2026-05-30（续）
 
 #### [修复] 正在转换时进度条文案错误显示"前方有任务"

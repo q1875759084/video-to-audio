@@ -334,6 +334,69 @@ ffmpeg -f concat -safe 0 -i concat.txt -c copy output.mp3
 
 ---
 
+## 文件访问鉴权
+
+### 为什么音频文件不需要鉴权（Capability URL 模式）
+
+**背景**：项目最初对 `/api/file/:fileId/preview` 和 `/api/file/:fileId/download` 都加了 JWT 鉴权，导致一系列复杂性：前端要 fetch+Blob 才能播放，下载要 query token 绕开 header 限制，还引发了移动端 `.vdat` 格式问题。
+
+**根本认知**：对文件访问加鉴权的前提是"文件属于某个用户，不能被他人访问"。本场景中：
+
+- `fileId` 是 UUID（128 位随机），外部无法枚举或猜测
+- 音频内容是用户从公网视频提取的，本身不是私密数据
+- 知道 URL 的人才能访问，不知道的人访问不了
+
+这是 **Capability URL** 模式——URL 本身就是访问凭证，和 Google Docs「知道链接的人可查看」是同一个思路，与 OSS 预签名 URL 同理。
+
+**市面标准做法**（convertio、cloudconvert 等）：转换完成后直接给一个带随机 ID 的下载链接，无需登录，链接 1~24 小时内有效，过期删除文件。
+
+**重构后的效果**：
+
+| | 重构前 | 重构后 |
+|--|--------|--------|
+| 播放 | fetch 全文件 → Blob URL → `<audio src>` | `<audio src="/api/file/:id/preview">` 直连 |
+| 下载 | Blob URL `a.click()` 或 query token 跳转 | `<a href="/api/file/:id/download" download>` |
+| 内存占用 | 整个文件（10MB wav = 10MB 内存） | 仅当前播放缓冲区（几十 KB） |
+| 移动端兼容 | 有 `.vdat` 问题 | 浏览器原生行为，无拦截 |
+| 代码复杂度 | Blob 生命周期管理、`fileDownloadAuthMiddleware` | 删掉所有相关代码 |
+
+**需要鉴权的接口**：转换提交、登录注册等写操作 / 有明确归属的数据查询（如历史记录）。静态文件类资源用 Capability URL 即可。
+
+---
+
+## 视频下载功能（待实现）
+
+### B 站视频的 DASH 格式与合并
+
+B 站视频采用 DASH（Dynamic Adaptive Streaming over HTTP）格式，视频流和音频流**分开存储**：
+
+```
+视频流：https://upos-sz-mirrorcos.bilivideo.com/.../xxx.m4s?...签名参数
+音频流：https://upos-sz-mirrorcos.bilivideo.com/.../xxx.m4s?...签名参数
+```
+
+`yt-dlp -g` 默认返回两行（分别是视频流和音频流 URL）。当前音频提取项目只用 `-f bestaudio`，所以只拿到一行（音频流）。
+
+如果要让用户下载完整视频，流程如下：
+
+```
+1. yt-dlp -g -f bestvideo+bestaudio --proxy socks5h://... URL
+   → 返回两行：视频流直链 + 音频流直链
+
+2. wget 分别下载两个直链 → video.m4s + audio.m4a
+
+3. ffmpeg -i video.m4s -i audio.m4a -c copy output.mp4
+   → 合并封装（-c copy 不重新编码，极快，秒级完成）
+
+4. 返回下载链接
+```
+
+与音频提取相比，只有第 1 步的 `-f` 参数和第 3 步的 ffmpeg 命令不同，`getKdlProxy()`、`downloadViaDirect()`、队列、SSE 全部可以复用。
+
+**注意**：视频文件动辄几百 MB，服务器存储和带宽成本显著高于音频提取，建议视频文件保留时间设置更短（如 1 小时自动清理）。
+
+---
+
 ## 移动端兼容
 
 ### 国产手机浏览器拦截 JS 触发下载，文件格式错误（.vdat）
