@@ -56,9 +56,17 @@ export interface ActiveTaskSummary {
   status: string;
 }
 
+/** 时间裁剪片段，HH:MM:SS 格式字符串 */
+export interface TimeSegment {
+  start: string;  // 如 "00:01:30"
+  end: string;    // 如 "00:03:00"
+}
+
 export interface SubmitUrlRequest {
   url: string;
   format: OutputFormat;
+  /** 不传或空数组表示不裁剪（下载完整音频） */
+  segments?: TimeSegment[];
 }
 
 export interface UploadInitRequest {

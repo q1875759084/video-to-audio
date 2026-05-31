@@ -7,6 +7,7 @@ import type {
   ConvertMode,
   OutputFormat,
   ActiveTaskSummary,
+  TimeSegment,
 } from '@/types/convert';
 import UrlInput from './UrlInput';
 import FileUpload from './FileUpload';
@@ -144,10 +145,10 @@ export default function ConvertPanel({ onConvertDone }: ConvertPanelProps) {
   }, [connectSSE]);
 
   /** URL 模式：提交链接 */
-  const handleUrlSubmit = useCallback(async (url: string, format: OutputFormat) => {
+  const handleUrlSubmit = useCallback(async (url: string, format: OutputFormat, segments?: TimeSegment[]) => {
     dispatch({ type: 'START_SUBMITTING' });
     try {
-      const { taskId } = await submitUrlConvert({ url, format });
+      const { taskId } = await submitUrlConvert({ url, format, segments });
       startQueued(taskId, format);
     } catch (err) {
       if (err instanceof TaskLimitError) {
