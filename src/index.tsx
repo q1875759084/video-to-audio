@@ -1,5 +1,9 @@
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import { initMonitor } from '@/utils/monitor';
+
+// 监控 SDK 在 React 渲染前初始化，确保能捕获到完整的性能指标和早期错误
+initMonitor();
 
 const container = document.getElementById('root');
 if (!container) {

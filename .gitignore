@@ -23,3 +23,7 @@ yarn-error.log*
 
 # Cache
 .cache/
+
+# yalc（本地 SDK 联调，不提交）
+.yalc/
+yalc.lock

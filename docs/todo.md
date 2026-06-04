@@ -37,9 +37,25 @@
 
 ---
 
-## P2 前端监控
+## P2 前端监控 SDK（跨项目）
 
-体现"上线后负责"的工程意识。
+体现"上线后负责"的工程意识，同时覆盖 carry-hub、security-quiz-game 等其他个人项目。
+架构：**通用 SDK（`@daibao/monitor`）→ 发布 npmjs.com → 各项目薄封装**，对齐企业私有 npm 模式。
 
-- [ ] **错误上报**：接入 Sentry（或自建），捕获未处理的 Promise rejection 和 React 渲染错误
-- [ ] **性能指标上报**：用 `web-vitals` 采集 CLS / LCP / FID，上报到后端 `/metrics` 或第三方平台
+### Phase 1：跑通链路
+- [ ] **SDK 骨架**：创建 `@daibao/monitor` 包，暴露 `init / trackEvent / reportError` 三个 API
+- [ ] **错误采集**（`error.ts`）：全局捕获 `onerror` + `unhandledrejection`，统一格式化后入队
+- [ ] **上报队列**（`reporter.ts`）：优先用 `navigator.sendBeacon`，降级 `fetch`；100ms 内批量合并上报，支持重试
+- [ ] **后端接收**：在 `video-backend` 加 `POST /collect` 路由，入库 SQLite（字段：`appKey / type / name / url / timestamp`）
+- [ ] **video-to-audio 接入**：在 `src/utils/monitor.ts` 薄封装，验证数据到达
+
+### Phase 2：补全能力
+- [ ] **性能采集**（`perf.ts`）：用 `web-vitals` 采集 FCP / LCP / CLS / FID / TTFB
+- [ ] **白屏检测**（`blank-screen.ts`）：对角线多点 `elementsFromPoint` 采样，全命中容器节点则判定白屏
+- [ ] **发布 npm**：发布到 npmjs.com（公开包），版本管理走 semver
+
+### Phase 3：多项目接入
+- [ ] carry-hub、security-quiz-game 各加 `src/utils/monitor.ts` 薄封装，`appKey` 区分来源
+- [ ] 简单数据大盘：查询 `/collect` 数据，展示各项目错误率 / 白屏次数 / 性能分位数
+
+**面试价值**：能讲清楚"平台能力 vs 业务消费"分层设计、`sendBeacon` 与 `fetch` 的取舍、白屏检测的采样方案。
