@@ -1,5 +1,5 @@
-import { init } from '@q1875759084/monitor';
-import type { MonitorEnv } from '@q1875759084/monitor';
+import { init } from '@cmjndy/monitor';
+import type { MonitorEnv } from '@cmjndy/monitor';
 
 // __DEPLOY_ENV__ 由 webpack.common.js DefinePlugin 注入
 // 取值约定：'dev'（本地开发）| 'test'（测试环境）| 'production'（生产环境）
@@ -29,9 +29,7 @@ const REPORT_URL_MAP: Record<string, string> = {
  * 监控 SDK 薄封装
  *
  * 职责：按当前部署环境组装 appKey / reportUrl / env 等初始化参数。
- * 不在这里实现采集逻辑，采集能力全部来自 @q1875759084/monitor SDK。
- *
- * 待 SDK 完成 track.ts 后，在此补充业务埋点函数。
+ * 不在这里实现采集逻辑，采集能力全部来自 @cmjndy/monitor SDK。
  */
 export function initMonitor() {
   const deployEnv = __DEPLOY_ENV__;
