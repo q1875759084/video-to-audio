@@ -22,7 +22,12 @@ FROM nginx:alpine
 # 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# 复制 Nginx 配置
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# 复制 Nginx 配置模板（含 ${MONITOR_BACKEND_URL} 占位符）
+# 不直接复制到 conf.d/，由启动命令 envsubst 展开后写入
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
+
+# nginx:alpine 官方镜像内置 /docker-entrypoint.d/20-envsubst-on-templates.sh
+# 启动时自动将 /etc/nginx/templates/*.template 经 envsubst 处理后输出到 /etc/nginx/conf.d/
+# 无需自定义 CMD，默认行为即可
